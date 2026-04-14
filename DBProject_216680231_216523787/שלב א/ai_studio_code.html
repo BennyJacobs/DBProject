@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymOps - מערכת ניהול חדר כושר</title>
+    <style>
+        /* CSS Variables for Tailwind-like aesthetic */
+        :root {
+            --bg-body: #f3f4f6;
+            --bg-surface: #ffffff;
+            --bg-sidebar: #1e293b;
+            --bg-sidebar-hover: #334155;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --text-light: #f8fafc;
+            --text-sidebar: #94a3b8;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --secondary: #e5e7eb;
+            --secondary-hover: #d1d5db;
+            --border: #e5e7eb;
+            --success-bg: #dcfce7;
+            --success-text: #166534;
+            --warning-bg: #fef9c3;
+            --warning-text: #854d0e;
+            --danger-bg: #fee2e2;
+            --danger-text: #991b1b;
+        }
+
+        /* Reset & Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Utility Classes */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Layout */
+        .sidebar {
+            width: 280px;
+            background-color: var(--bg-sidebar);
+            color: var(--text-sidebar);
+            display: flex;
+            flex-direction: column;
+            box-shadow: -4px 0 6px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+
+        /* Sidebar Styling */
+        .brand {
+            padding: 1.5rem;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--text-light);
+            border-bottom: 1px solid #334155;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem 0;
+            flex: 1;
+        }
+
+        .nav-item {
+            padding: 0.875rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 500;
+            font-size: 1.05rem;
+        }
+
+        .nav-item:hover {
+            background-color: var(--bg-sidebar-hover);
+            color: var(--text-light);
+        }
+
+        .nav-item.active {
+            background-color: var(--primary);
+            color: var(--text-light);
+            border-right: 4px solid #60a5fa;
+        }
+
+        /* Header Styling */
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .page-title {
+            font-size: 1.875rem;
+            font-weight: bold;
+            color: var(--text-main);
+        }
+
+        /* KPI Cards */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .kpi-card {
+            background-color: var(--bg-surface);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .kpi-title {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .kpi-value {
+            font-size: 2.25rem;
+            font-weight: bold;
+            color: var(--text-main);
+        }
+
+        /* Table Section */
+        .data-section {
+            background-color: var(--bg-surface);
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 2rem; /* Ensures vertical stacking looks clean */
+        }
+
+        .data-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #ffffff;
+        }
+
+        .data-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .crud-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: background-color 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary { background-color: var(--primary); color: white; }
+        .btn-primary:hover { background-color: var(--primary-hover); }
+
+        .btn-secondary { background-color: var(--secondary); color: var(--text-main); }
+        .btn-secondary:hover { background-color: var(--secondary-hover); }
+
+        .btn-danger { background-color: white; color: var(--danger); border: 1px solid var(--border); }
+        .btn-danger:hover { background-color: #fee2e2; border-color: var(--danger); }
+
+        /* Table Styles */
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: right;
+        }
+
+        th {
+            background-color: #f9fafb;
+            padding: 1rem 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 1rem 1.5rem;
+            font-size: 0.95rem;
+            color: var(--text-main);
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        tbody tr:hover { background-color: #f9fafb; }
+        tbody tr:last-child td { border-bottom: none; }
+
+        /* Badges */
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .badge-success { background-color: var(--success-bg); color: var(--success-text); }
+        .badge-warning { background-color: var(--warning-bg); color: var(--warning-text); }
+        .badge-danger { background-color: var(--danger-bg); color: var(--danger-text); }
+        .badge-neutral { background-color: #e5e7eb; color: #374151; }
+        
+        /* Checkbox */
+        .row-checkbox { width: 1rem; height: 1rem; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+        <div class="brand">
+            <span>⚡</span> GymOps
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item active" data-target="section-customers" onclick="switchTab('section-customers')">
+                <span>👥</span> מנויים ולקוחות
+            </li>
+            <li class="nav-item" data-target="section-facilities" onclick="switchTab('section-facilities')">
+                <span>🏋️</span> מתחמים וציוד
+            </li>
+            <li class="nav-item" data-target="section-maintenance" onclick="switchTab('section-maintenance')">
+                <span>🔧</span> תחזוקה ושירות
+            </li>
+            <li class="nav-item" data-target="section-inventory" onclick="switchTab('section-inventory')">
+                <span>📦</span> רכש ומלאי
+            </li>
+        </ul>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+
+        <!-- ==================== SECTION 1: CUSTOMERS & SUBSCRIPTIONS ==================== -->
+        <div id="section-customers" class="content-section">
+            <header class="page-header">
+                <h1 class="page-title">ניהול מנויים ולקוחות</h1>
+            </header>
+
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <span class="kpi-title">לקוחות רשומים</span>
+                    <span class="kpi-value">1,204</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-title">מנויים פעילים</span>
+                    <span class="kpi-value">842</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-title">תשלומים החודש</span>
+                    <span class="kpi-value">₪84,500</span>
+                </div>
+            </div>
+
+            <!-- Table 1: לקוחות -->
+            <section class="data-section">
+                <div class="data-header">
+                    <h2 class="data-title">1. מאגר לקוחות</h2>
+                    <div class="crud-actions">
+                        <button class="btn btn-primary">➕ הוסף לקוח</button>
+                        <button class="btn btn-secondary">✏️ ערוך</button>
+                        <button class="btn btn-danger">🗑️ מחק</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"><input type="checkbox" class="row-checkbox"></th>
+                                <th>ת"ז לקוח (Customer_ID)</th>
+                                <th>שם פרטי (First_Name)</th>
+                                <th>שם משפחה (Last_Name)</th>
+                                <th>טלפון (Phone_Number)</th>
+                                <th>דוא"ל (Email)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>301234567</strong></td>
+                                <td>ישראל</td>
+                                <td>ישראלי</td>
+                                <td>050-1234567</td>
+                                <td>israel@mail.com</td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>204987654</strong></td>
+                                <td>דנה</td>
+                                <td>לוי</td>
+                                <td>054-9876543</td>
+                                <td>dana.l@mail.com</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Table 2: מנויים -->
+            <section class="data-section">
+                <div class="data-header">
+                    <h2 class="data-title">2. חוזי מנוי</h2>
+                    <div class="crud-actions">
+                        <button class="btn btn-primary">➕ הוסף מנוי</button>
+                        <button class="btn btn-secondary">✏️ ערוך</button>
+                        <button class="btn btn-danger">🗑️ מחק</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"><input type="checkbox" class="row-checkbox"></th>
+                                <th>מספר חוזה (Contract_Number)</th>
+                                <th>ת"ז לקוח (Customer_ID)</th>
+                                <th>תאריך רכישה (Purchase_Date)</th>
+                                <th>תאריך תפוגה (Expiration_Date)</th>
+                                <th>עלות כוללת (Total_Cost)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>SUB-10045</strong></td>
+                                <td>301234567</td>
+                                <td>01/01/2023</td>
+                                <td>01/01/2024</td>
+                                <td>₪2,400.00</td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>SUB-10046</strong></td>
+                                <td>204987654</td>
+                                <td>15/05/2023</td>
+                                <td>15/05/2024</td>
+                                <td>₪2,800.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Table 3: תשלומים -->
+            <section class="data-section">
+                <div class="data-header">
+                    <h2 class="data-title">3. קבלות ותשלומים</h2>
+                    <div class="crud-actions">
+                        <button class="btn btn-primary">➕ הנפק קבלה</button>
+                        <button class="btn btn-secondary">✏️ ערוך</button>
+                        <button class="btn btn-danger">🗑️ בטל קבלה</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"><input type="checkbox" class="row-checkbox"></th>
+                                <th>מספר קבלה (Receipt_Number)</th>
+                                <th>מספר חוזה (Contract_Number)</th>
+                                <th>סכום התשלום (Payment_Amount)</th>
+                                <th>תאריך תשלום (Payment_Date)</th>
+                                <th>אמצעי תשלום (Payment_Method)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>REC-9901</strong></td>
+                                <td>SUB-10045</td>
+                                <td>₪2,400.00</td>
+                                <td>01/01/2023</td>
+                                <td>כרטיס אשראי</td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>REC-9902</strong></td>
+                                <td>SUB-10046</td>
+                                <td>₪2,800.00</td>
+                                <td>15/05/2023</td>
+                                <td>העברה בנקאית</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <!-- ==================== SECTION 2: FACILITIES & EQUIPMENT ==================== -->
+        <div id="section-facilities" class="content-section hidden">
+            <header class="page-header">
+                <h1 class="page-title">ניהול מתחמים וציוד כושר</h1>
+            </header>
+
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <span class="kpi-title">מכשירים פעילים</span>
+                    <span class="kpi-value">142</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-title">סה"כ מתחמים</span>
+                    <span class="kpi-value">5</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-title">קיבולת מתאמנים כוללת</span>
+                    <span class="kpi-value">350</span>
+                </div>
+            </div>
+
+            <!-- Table 4: מתחמים -->
+            <section class="data-section">
+                <div class="data-header">
+                    <h2 class="data-title">4. מתחמים ואולמות</h2>
+                    <div class="crud-actions">
+                        <button class="btn btn-primary">➕ הוסף מתחם</button>
+                        <button class="btn btn-secondary">✏️ ערוך</button>
+                        <button class="btn btn-danger">🗑️ מחק</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"><input type="checkbox" class="row-checkbox"></th>
+                                <th>קוד מתחם (Zone_Code)</th>
+                                <th>שם המתחם (Zone_Name)</th>
+                                <th>קיבולת מקסימלית (Max_Capacity)</th>
+                                <th>שטח מ"ר (Area_Sqm)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>Z-WEIGHT</strong></td>
+                                <td>אזור משקולות חופשיים</td>
+                                <td>50</td>
+                                <td>250.5</td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>Z-CARDIO</strong></td>
+                                <td>מתחם אירובי</td>
+                                <td>40</td>
+                                <td>200.0</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Table 5: מכשירי כושר -->
+            <section class="data-section">
+                <div class="data-header">
+                    <h2 class="data-title">5. מלאי מכשירי כושר</h2>
+                    <div class="crud-actions">
+                        <button class="btn btn-primary">➕ הוסף מכשיר</button>
+                        <button class="btn btn-secondary">✏️ ערוך</button>
+                        <button class="btn btn-danger">🗑️ מחק</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"><input type="checkbox" class="row-checkbox"></th>
+                                <th>מספר סידורי (Serial_Number)</th>
+                                <th>קוד מתחם (Zone_Code)</th>
+                                <th>יצרן (Manufacturer)</th>
+                                <th>דגם (Model)</th>
+                                <th>סטטוס מכשיר (Machine_Status)</th>
+                                <th>תאריך רכישה (Purchase_Date)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>SN-TRM-01</strong></td>
+                                <td>Z-CARDIO</td>
+                                <td>LifeFitness</td>
+                                <td>הליכון X900</td>
+                                <td><span class="badge badge-success">פעיל</span></td>
+                                <td>12/06/2021</td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>SN-BNC-04</strong></td>
+                                <td>Z-WEIGHT</td>
+                                <td>Matrix</td>
+                                <td>ספת לחיצה</td>
+                                <td><span class="badge badge-warning">בתיקון</span></td>
+                                <td>05/01/2022</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <!-- ==================== SECTION 3: MAINTENANCE & SERVICE ==================== -->
+        <div id="section-maintenance" class="content-section hidden">
+            <header class="page-header">
+                <h1 class="page-title">ניהול תחזוקה ושירות</h1>
+            </header>
+
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <span class="kpi-title">קריאות פתוחות</span>
+                    <span class="kpi-value" style="color: var(--danger);">3</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-title">אנשי צוות</span>
+                    <span class="kpi-value">12</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-title">זמן טיפול ממוצע</span>
+                    <span class="kpi-value">24h</span>
+                </div>
+            </div>
+
+            <!-- Table 6: קריאות שירות -->
+            <section class="data-section">
+                <div class="data-header">
+                    <h2 class="data-title">6. קריאות שירות ותחזוקה</h2>
+                    <div class="crud-actions">
+                        <button class="btn btn-primary">➕ פתח קריאה</button>
+                        <button class="btn btn-secondary">✏️ ערוך</button>
+                        <button class="btn btn-danger">🗑️ מחק</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"><input type="checkbox" class="row-checkbox"></th>
+                                <th>מספר קריאה (Ticket_Number)</th>
+                                <th>מס' סידורי (Serial_Number)</th>
+                                <th>ח.פ ספק (Supplier_ID)</th>
+                                <th>תאריך פתיחה (Open_Date)</th>
+                                <th>תיאור התקלה (Issue_Description)</th>
+                                <th>סטטוס (Ticket_Status)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>MR-1001</strong></td>
+                                <td>SN-BNC-04</td>
+                                <td>512345678</td>
+                                <td>24/10/2023</td>
+                                <td>ריפוד קרוע בספסל</td>
+                                <td><span class="badge badge-warning">בטיפול</span></td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>MR-1002</strong></td>
+                                <td>SN-TRM-05</td>
+                                <td>510987654</td>
+                                <td>25/10/2023</td>
+                                <td>מסך מגע לא מגיב</td>
+                                <td><span class="badge badge-danger">פתוח</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Table 7: עובדים -->
+            <section class="data-section">
+                <div class="data-header">
+                    <h2 class="data-title">7. צוות עובדים</h2>
+                    <div class="crud-actions">
+                        <button class="btn btn-primary">➕ הוסף עובד</button>
+                        <button class="btn btn-secondary">✏️ ערוך</button>
+                        <button class="btn btn-danger">🗑️ מחק</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"><input type="checkbox" class="row-checkbox"></th>
+                                <th>ת"ז עובד (Employee_ID)</th>
+                                <th>שם פרטי (First_Name)</th>
+                                <th>שם משפחה (Last_Name)</th>
+                                <th>תפקיד (Job_Title)</th>
+                                <th>תאריך תחילת העסקה (Hire_Date)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>012345678</strong></td>
+                                <td>משה</td>
+                                <td>כהן</td>
+                                <td>טכנאי ראשי</td>
+                                <td>15/03/2019</td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>098765432</strong></td>
+                                <td>אלי</td>
+                                <td>אברהם</td>
+                                <td>איש אחזקה</td>
+                                <td>01/08/2021</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <!-- ==================== SECTION 4: PURCHASING & INVENTORY ==================== -->
+        <div id="section-inventory" class="content-section hidden">
+            <header class="page-header">
+                <h1 class="page-title">ניהול רכש ומלאי</h1>
+            </header>
+
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <span class="kpi-title">פריטים בחוסר</span>
+                    <span class="kpi-value" style="color: var(--danger);">2</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-title">הזמנות רכש פתוחות</span>
+                    <span class="kpi-value">4</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-title">ספקים פעילים</span>
+                    <span class="kpi-value">15</span>
+                </div>
+            </div>
+
+            <!-- Table 8: חלקי חילוף -->
+            <section class="data-section">
+                <div class="data-header">
+                    <h2 class="data-title">8. חלקי חילוף במלאי</h2>
+                    <div class="crud-actions">
+                        <button class="btn btn-primary">➕ הוסף פריט</button>
+                        <button class="btn btn-secondary">✏️ ערוך</button>
+                        <button class="btn btn-danger">🗑️ מחק</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"><input type="checkbox" class="row-checkbox"></th>
+                                <th>מק"ט (Part_Number)</th>
+                                <th>תיאור פריט (Part_Description)</th>
+                                <th>כמות במלאי (Stock_Quantity)</th>
+                                <th>נקודת הזמנה (Reorder_Level)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>SP-BELT-01</strong></td>
+                                <td>רצועה חלופית להליכון X900</td>
+                                <td>2</td>
+                                <td>5</td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>SP-CBL-05</strong></td>
+                                <td>כבל פלדה למכשיר קרוסאובר</td>
+                                <td>15</td>
+                                <td>10</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Table 9: ספקים -->
+            <section class="data-section">
+                <div class="data-header">
+                    <h2 class="data-title">9. ספקים</h2>
+                    <div class="crud-actions">
+                        <button class="btn btn-primary">➕ הוסף ספק</button>
+                        <button class="btn btn-secondary">✏️ ערוך</button>
+                        <button class="btn btn-danger">🗑️ מחק</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"><input type="checkbox" class="row-checkbox"></th>
+                                <th>ח.פ ספק (Supplier_ID)</th>
+                                <th>שם חברה (Company_Name)</th>
+                                <th>איש קשר (Contact_Person)</th>
+                                <th>טלפון (Phone_Number)</th>
+                                <th>דוא"ל (Email)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>512345678</strong></td>
+                                <td>ספורט-ליין ציוד כושר בע"מ</td>
+                                <td>שרה לוי</td>
+                                <td>03-9998888</td>
+                                <td>sales@sportline.co.il</td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>510987654</strong></td>
+                                <td>חלפים אקספרס</td>
+                                <td>יוסי כהן</td>
+                                <td>09-7776666</td>
+                                <td>info@halafim.co.il</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Table 10: הזמנות רכש -->
+            <section class="data-section">
+                <div class="data-header">
+                    <h2 class="data-title">10. ראשי הזמנות רכש</h2>
+                    <div class="crud-actions">
+                        <button class="btn btn-primary">➕ צור הזמנה</button>
+                        <button class="btn btn-secondary">✏️ ערוך</button>
+                        <button class="btn btn-danger">🗑️ מחק</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"><input type="checkbox" class="row-checkbox"></th>
+                                <th>מספר הזמנה (Order_Number)</th>
+                                <th>ח.פ ספק (Supplier_ID)</th>
+                                <th>ת"ז עובד (Employee_ID)</th>
+                                <th>תאריך הזמנה (Order_Date)</th>
+                                <th>עלות מוערכת (Estimated_Total_Cost)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>PO-2023-08</strong></td>
+                                <td>512345678</td>
+                                <td>012345678</td>
+                                <td>01/09/2023</td>
+                                <td>₪1,250.00</td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>PO-2023-09</strong></td>
+                                <td>510987654</td>
+                                <td>098765432</td>
+                                <td>15/09/2023</td>
+                                <td>₪480.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            
+            <!-- Table 11: פריטי הזמנה -->
+            <section class="data-section">
+                <div class="data-header">
+                    <h2 class="data-title">11. פריטי הזמנה (Order Items)</h2>
+                    <div class="crud-actions">
+                        <button class="btn btn-primary">➕ הוסף פריט להזמנה</button>
+                        <button class="btn btn-secondary">✏️ ערוך</button>
+                        <button class="btn btn-danger">🗑️ מחק</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"><input type="checkbox" class="row-checkbox"></th>
+                                <th>מספר הזמנה (Order_Number)</th>
+                                <th>מק"ט (Part_Number)</th>
+                                <th>כמות מוזמנת (Ordered_Quantity)</th>
+                                <th>מחיר יחידה סופי (Final_Unit_Price)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>PO-2023-08</strong></td>
+                                <td>SP-BELT-01</td>
+                                <td>2</td>
+                                <td>₪450.00</td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>PO-2023-08</strong></td>
+                                <td>SP-CBL-05</td>
+                                <td>1</td>
+                                <td>₪350.00</td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="row-checkbox"></td>
+                                <td><strong>PO-2023-09</strong></td>
+                                <td>SP-CBL-05</td>
+                                <td>4</td>
+                                <td>₪120.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+    </main>
+
+    <!-- JavaScript for Tab Switching -->
+    <script>
+        function switchTab(targetId) {
+            // 1. Hide all content sections
+            const sections = document.querySelectorAll('.content-section');
+            sections.forEach(section => {
+                section.classList.add('hidden');
+            });
+
+            // 2. Remove 'active' class from all sidebar nav items
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.classList.remove('active');
+            });
+
+            // 3. Show the targeted content section
+            const activeSection = document.getElementById(targetId);
+            if (activeSection) {
+                activeSection.classList.remove('hidden');
+            }
+
+            // 4. Add 'active' class to the clicked nav item
+            const activeNav = document.querySelector(`.nav-item[data-target="${targetId}"]`);
+            if (activeNav) {
+                activeNav.classList.add('active');
+            }
+            
+            // Scroll to top of main content on tab switch
+            document.querySelector('.main-content').scrollTop = 0;
+        }
+    </script>
+</body>
+</html>
