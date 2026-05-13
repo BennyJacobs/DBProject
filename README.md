@@ -97,3 +97,638 @@ Ensuring disaster recovery is a critical component of database management. We su
 **Restoration Process Validation:**
 We tested the integrity of our backup by dropping the tables (via `dropTables.sql`) and successfully restoring the entire database state from the dump file.
 ![Database Restore Process](DBProject_216680231_216523787/images/Backup/image2.jpeg)
+
+
+
+# Phase B Project Report: GymOps Database System
+
+## 1. Project Presenters & Overview
+
+* **Submitter 1:** Benny Jacobs  
+* **Submitter 2:** Yehuda Boaz  
+* **System Name:** GymOps - Comprehensive Gym Management System  
+* **Selected Sub-Unit:** Gym Operations, Equipment Maintenance, and Membership Tracking  
+
+---
+
+# Table of Contents
+
+1. [Project Presenters & Overview](#1-project-presenters--overview)  
+2. [Regular SELECT Queries](#2-regular-select-queries-complex--multi-table)  
+3. [Efficiency Comparison Queries](#3-efficiency-comparison-queries-double-selects)  
+4. [Data Modification (UPDATE & DELETE)](#4-data-modification-update--delete)  
+5. [Database Constraints](#5-database-constraints)  
+6. [Database Indexing & Optimization](#6-database-indexing--optimization)  
+
+---
+
+# 2. Regular SELECT Queries (Complex / Multi-table)
+
+## Query 1: Annual Payment Champions
+
+### Description
+This query finds the customer who made the highest single payment in the year 2023.
+
+### SQL
+
+```sql
+SELECT 
+    C.Customer_ID,
+    C.First_Name,
+    C.Last_Name,
+    P.Payment_Date,
+    P.Payment_Amount
+FROM CUSTOMER C
+JOIN SUBSCRIPTION S 
+    ON C.Customer_ID = S.Customer_ID
+JOIN PAYMENT P 
+    ON S.Contract_Number = P.Contract_Number
+WHERE P.Payment_Amount = (
+    SELECT MAX(P2.Payment_Amount)
+    FROM PAYMENT P2
+    WHERE EXTRACT(YEAR FROM P2.Payment_Date) = 2023
+)
+AND EXTRACT(YEAR FROM P.Payment_Date) = 2023;
+```
+
+---
+
+## Query 2: Zone Density Analysis
+
+### Description
+Retrieves facility zones where the average space per person is less than 4.5 square meters, and there are at least 3 active machines currently in that zone.
+
+### SQL
+
+```sql
+SELECT
+    FZ.Zone_Name,
+    FZ.Max_Capacity,
+    FZ.Area_Sqm,
+    (FZ.Area_Sqm / FZ.Max_Capacity) AS Sqm_Per_Person,
+    COUNT(FM.Serial_Number) AS Active_Machines_Count
+FROM FACILITY_ZONE FZ
+JOIN FITNESS_MACHINE FM 
+    ON FZ.Zone_Code = FM.Zone_Code
+WHERE FM.Machine_Status = 'Active'
+GROUP BY
+    FZ.Zone_Code,
+    FZ.Zone_Name,
+    FZ.Max_Capacity,
+    FZ.Area_Sqm
+HAVING (FZ.Area_Sqm / FZ.Max_Capacity) < 4.5
+   AND COUNT(FM.Serial_Number) >= 3
+ORDER BY Sqm_Per_Person ASC;
+```
+
+---
+
+## Query 3: Old Equipment Issue Tracking
+
+### Description
+Identifies manufacturers of equipment purchased before 2022 that currently have open or "in-progress" maintenance service tickets.
+
+### SQL
+
+```sql
+SELECT
+    FM.Manufacturer,
+    COUNT(MT.Ticket_Number) AS Open_Tickets
+FROM FITNESS_MACHINE FM
+JOIN MAINTENANCE_TICKET MT 
+    ON FM.Serial_Number = MT.Serial_Number
+WHERE EXTRACT(YEAR FROM FM.Purchase_Date) < 2022
+  AND MT.Ticket_Status IN ('Open', 'In Progress')
+GROUP BY FM.Manufacturer
+ORDER BY Open_Tickets DESC;
+```
+
+---
+
+## Query 4: Employee Purchasing Performance Report
+
+### Description
+Calculates the total items ordered by each employee in the last 6 months, filtered to show only employees who ordered more than 10 items in total.
+
+### SQL
+
+```sql
+SELECT
+    E.First_Name,
+    E.Last_Name,
+    COUNT(DISTINCT PO.Order_Number) AS Total_Orders,
+    SUM(OI.Ordered_Quantity) AS Total_Items_Ordered
+FROM EMPLOYEE E
+JOIN PURCHASE_ORDER PO 
+    ON E.Employee_ID = PO.Employee_ID
+JOIN ORDER_ITEM OI 
+    ON PO.Order_Number = OI.Order_Number
+WHERE PO.Order_Date >= DATE '2024-12-31' - INTERVAL '6 months'
+GROUP BY
+    E.Employee_ID,
+    E.First_Name,
+    E.Last_Name
+HAVING SUM(OI.Ordered_Quantity) > 10
+ORDER BY Total_Items_Ordered DESC;
+```
+
+---
+
+# 3. Efficiency Comparison Queries (Double SELECTs)
+
+## Pair 1: Customer Subscription Status Comparison
+
+### Description
+Identifies if the latest subscription is an upgrade, downgrade, no change, or a new customer compared to their previous one.
+
+---
+
+### Method 1: Using Self-Join and Correlated Subqueries (Less Efficient)
+
+```sql
+SELECT
+    C.First_Name,
+    C.Last_Name,
+    S1.Total_Cost AS Current_Cost,
+    S2.Total_Cost AS Previous_Cost,
+    CASE
+        WHEN S2.Total_Cost IS NULL THEN 'New Customer'
+        WHEN S1.Total_Cost > S2.Total_Cost THEN 'Upgrade'
+        WHEN S1.Total_Cost < S2.Total_Cost THEN 'Downgrade'
+        ELSE 'No Change'
+    END AS Status_Indicator
+FROM CUSTOMER C
+JOIN SUBSCRIPTION S1 
+    ON C.Customer_ID = S1.Customer_ID
+LEFT JOIN SUBSCRIPTION S2 
+    ON S1.Customer_ID = S2.Customer_ID
+   AND S2.Expiration_Date = (
+        SELECT MAX(S3.Expiration_Date)
+        FROM SUBSCRIPTION S3
+        WHERE S3.Customer_ID = S1.Customer_ID
+          AND S3.Expiration_Date < S1.Expiration_Date
+   )
+WHERE S1.Expiration_Date = (
+    SELECT MAX(S4.Expiration_Date)
+    FROM SUBSCRIPTION S4
+    WHERE S4.Customer_ID = S1.Customer_ID
+);
+```
+
+---
+
+### Method 2: Using Window Functions (More Efficient)
+
+```sql
+SELECT
+    First_Name,
+    Last_Name,
+    Current_Cost,
+    Previous_Cost,
+    CASE
+        WHEN Previous_Cost IS NULL THEN 'New Customer'
+        WHEN Current_Cost > Previous_Cost THEN 'Upgrade'
+        WHEN Current_Cost < Previous_Cost THEN 'Downgrade'
+        ELSE 'No Change'
+    END AS Status_Indicator
+FROM (
+    SELECT
+        C.First_Name,
+        C.Last_Name,
+        S.Total_Cost AS Current_Cost,
+        LAG(S.Total_Cost) OVER (
+            PARTITION BY S.Customer_ID
+            ORDER BY S.Expiration_Date
+        ) AS Previous_Cost,
+        ROW_NUMBER() OVER (
+            PARTITION BY S.Customer_ID
+            ORDER BY S.Expiration_Date DESC
+        ) AS rn
+    FROM CUSTOMER C
+    JOIN SUBSCRIPTION S 
+        ON C.Customer_ID = S.Customer_ID
+) Sub
+WHERE rn = 1;
+```
+
+### Efficiency Explanation
+Method 2 is more efficient for modern SQL engines. Window functions (`LAG`, `ROW_NUMBER`) allow the database engine to scan and partition the data in a single pass. Method 1 relies on correlated subqueries which force the database engine to recalculate the subquery for every row, leading to redundant table scans.
+
+---
+
+## Pair 2: Zones with Multiple Breakdowns
+
+### Description
+Retrieves zones with more than 2 machines currently in repair, including a count of active machines.
+
+---
+
+### Method 1: Using CASE inside SUM (More Efficient)
+
+```sql
+SELECT
+    FZ.Zone_Name,
+    SUM(CASE
+            WHEN FM.Machine_Status = 'In Repair'
+            THEN 1
+            ELSE 0
+        END) AS Broken_Machines,
+    SUM(CASE
+            WHEN FM.Machine_Status = 'Active'
+            THEN 1
+            ELSE 0
+        END) AS Active_Machines
+FROM FACILITY_ZONE FZ
+JOIN FITNESS_MACHINE FM 
+    ON FZ.Zone_Code = FM.Zone_Code
+GROUP BY
+    FZ.Zone_Code,
+    FZ.Zone_Name
+HAVING SUM(CASE
+              WHEN FM.Machine_Status = 'In Repair'
+              THEN 1
+              ELSE 0
+           END) > 2
+ORDER BY Broken_Machines DESC;
+```
+
+---
+
+### Method 2: Using Subqueries in SELECT (Less Efficient)
+
+```sql
+SELECT
+    FZ.Zone_Name,
+    (
+        SELECT COUNT(*)
+        FROM FITNESS_MACHINE FM1
+        WHERE FM1.Zone_Code = FZ.Zone_Code
+          AND FM1.Machine_Status = 'In Repair'
+    ) AS Broken_Machines,
+    (
+        SELECT COUNT(*)
+        FROM FITNESS_MACHINE FM2
+        WHERE FM2.Zone_Code = FZ.Zone_Code
+          AND FM2.Machine_Status = 'Active'
+    ) AS Active_Machines
+FROM FACILITY_ZONE FZ
+WHERE (
+    SELECT COUNT(*)
+    FROM FITNESS_MACHINE FM3
+    WHERE FM3.Zone_Code = FZ.Zone_Code
+      AND FM3.Machine_Status = 'In Repair'
+) > 2
+ORDER BY Broken_Machines DESC;
+```
+
+### Efficiency Explanation
+Method 1 is significantly faster as it completes a single-pass scan over the machine table and aggregates the data conditionally using `CASE`. Method 2 requires 3 separate scans of the machine table per record, generating a heavy execution plan that taxes system memory.
+
+---
+
+## Pair 3: Suppliers for Urgent Restock
+
+### Description
+Identifies suppliers for parts that dropped below the reorder level and were already ordered this month.
+
+---
+
+### Method 1: Using EXISTS (More Efficient)
+
+```sql
+SELECT
+    S.Supplier_ID,
+    S.Company_Name,
+    S.Phone_Number
+FROM SUPPLIER S
+WHERE EXISTS (
+    SELECT 1
+    FROM PURCHASE_ORDER PO
+    JOIN ORDER_ITEM OI 
+        ON PO.Order_Number = OI.Order_Number
+    JOIN SPARE_PART SP 
+        ON OI.Part_Number = SP.Part_Number
+    WHERE PO.Supplier_ID = S.Supplier_ID
+      AND SP.Stock_Quantity < SP.Reorder_Level
+      AND EXTRACT(MONTH FROM PO.Order_Date) = 12
+);
+```
+
+---
+
+### Method 2: Using DISTINCT and JOIN (Less Efficient)
+
+```sql
+SELECT DISTINCT
+    S.Supplier_ID,
+    S.Company_Name,
+    S.Phone_Number
+FROM SUPPLIER S
+JOIN PURCHASE_ORDER PO 
+    ON S.Supplier_ID = PO.Supplier_ID
+JOIN ORDER_ITEM OI 
+    ON PO.Order_Number = OI.Order_Number
+JOIN SPARE_PART SP 
+    ON OI.Part_Number = SP.Part_Number
+WHERE SP.Stock_Quantity < SP.Reorder_Level
+  AND EXTRACT(MONTH FROM PO.Order_Date) = 12
+  AND EXTRACT(YEAR FROM PO.Order_Date) = 2024;
+```
+
+### Efficiency Explanation
+Method 1 uses short-circuit evaluation; the database stops searching as soon as it finds the first matching record for a supplier. Method 2 performs a full-table JOIN, loads all matches into memory, and only then filters out duplicates using `DISTINCT`, which is highly inefficient for large datasets.
+
+---
+
+## Pair 4: Employees Dealing with Problematic Suppliers
+
+### Description
+Finds employees who issued purchase orders to suppliers with open service tickets older than 7 days.
+
+---
+
+### Method 1: Using CTE (More Efficient)
+
+```sql
+WITH Problematic_Suppliers AS (
+    SELECT DISTINCT Supplier_ID
+    FROM MAINTENANCE_TICKET
+    WHERE Ticket_Status = 'Open'
+      AND '2024-12-31' - Open_Date > 7
+)
+SELECT DISTINCT
+    E.First_Name,
+    E.Last_Name,
+    E.Job_Title
+FROM EMPLOYEE E
+JOIN PURCHASE_ORDER PO 
+    ON E.Employee_ID = PO.Employee_ID
+JOIN Problematic_Suppliers PS 
+    ON PO.Supplier_ID = PS.Supplier_ID;
+```
+
+---
+
+### Method 2: Using Nested IN Clauses (Less Efficient)
+
+```sql
+SELECT
+    E.First_Name,
+    E.Last_Name,
+    E.Job_Title
+FROM EMPLOYEE E
+WHERE E.Employee_ID IN (
+    SELECT PO.Employee_ID
+    FROM PURCHASE_ORDER PO
+    WHERE PO.Supplier_ID IN (
+        SELECT MT.Supplier_ID
+        FROM MAINTENANCE_TICKET MT
+        WHERE MT.Ticket_Status = 'Open'
+          AND MT.Open_Date < '2024-12-31' - INTERVAL '7 days'
+    )
+);
+```
+
+### Efficiency Explanation
+Method 1 keeps an intermediate logical table in memory (the CTE) and performs an optimized `JOIN`. Method 2 can create a heavy execution plan in some database engines due to the deep nesting of `IN` clauses.
+
+---
+
+# 4. Data Modification (UPDATE & DELETE)
+
+## Transaction Management Process (COMMIT / ROLLBACK)
+
+To ensure data integrity, all modifications were wrapped in explicit transactions.
+
+### Workflow
+
+1. `SELECT` to view the initial state  
+2. `BEGIN;` to start the transaction block  
+3. Execute the `UPDATE` or `DELETE` query  
+4. `SELECT` to verify the temporary changes  
+5. `COMMIT;` to apply changes permanently, or `ROLLBACK;` to undo them  
+
+---
+
+# UPDATE Queries
+
+## 1. VIP Customer Bonus
+
+### Description
+Adds one month to the expiration date of subscriptions purchased in 2023, where total payments exceed 2000.
+
+### SQL
+
+```sql
+UPDATE SUBSCRIPTION
+SET Expiration_Date = Expiration_Date + INTERVAL '1 month'
+WHERE EXTRACT(YEAR FROM Purchase_Date) = 2023
+  AND Contract_Number IN (
+      SELECT Contract_Number
+      FROM PAYMENT
+      GROUP BY Contract_Number
+      HAVING SUM(Payment_Amount) > 2000
+  );
+```
+
+---
+
+## 2. Automatic Equipment Deactivation
+
+### Description
+Changes machine status to `'Out of Order'` if it has an open service ticket that hasn't been handled for over 14 days.
+
+### SQL
+
+```sql
+UPDATE FITNESS_MACHINE
+SET Machine_Status = 'Out of Order'
+WHERE Serial_Number IN (
+    SELECT Serial_Number
+    FROM MAINTENANCE_TICKET
+    WHERE Ticket_Status = 'Open'
+      AND '2024-12-31' - Open_Date > 14
+);
+```
+
+---
+
+## 3. Supply Chain Optimization
+
+### Description
+Increases the reorder level by 20% for spare parts ordered more than 5 times this year.
+
+### SQL
+
+```sql
+UPDATE SPARE_PART
+SET Reorder_Level = ROUND(Reorder_Level * 1.2)
+WHERE Part_Number IN (
+    SELECT OI.Part_Number
+    FROM ORDER_ITEM OI
+    JOIN PURCHASE_ORDER PO
+        ON OI.Order_Number = PO.Order_Number
+    WHERE EXTRACT(YEAR FROM PO.Order_Date) = 2024
+    GROUP BY OI.Part_Number
+    HAVING SUM(OI.Ordered_Quantity) > 5
+);
+```
+
+---
+
+# DELETE Queries
+
+## 1. Archive Service Tickets
+
+### Description
+Deletes closed service tickets that were opened more than two years ago.
+
+### SQL
+
+```sql
+DELETE FROM MAINTENANCE_TICKET
+WHERE Ticket_Status = 'Closed'
+  AND 2024 - EXTRACT(YEAR FROM Open_Date) >= 2;
+```
+
+---
+
+## 2. Data Cleansing
+
+### Description
+Deletes purchase order items where the ordered quantity is `0`.
+
+### SQL
+
+```sql
+DELETE FROM ORDER_ITEM
+WHERE Ordered_Quantity = 0;
+```
+
+---
+
+## 3. Remove Obsolete Spare Parts
+
+### Description
+Deletes spare parts that have `0` stock, `0` reorder level, and have never been ordered before.
+
+### SQL
+
+```sql
+DELETE FROM SPARE_PART
+WHERE Stock_Quantity = 0
+  AND Reorder_Level = 0
+  AND Part_Number NOT IN (
+      SELECT DISTINCT Part_Number
+      FROM ORDER_ITEM
+  );
+```
+
+---
+
+# 5. Database Constraints
+
+We implemented 3 new `CHECK` constraints to verify logical data integrity and prevent human entry errors at the database layer.
+
+---
+
+## 1. Payment Method Limit (`chk_payment_method`)
+
+### Motivation
+Prevents free-text entry in the payment method column, ensuring uniform financial data.
+
+### SQL
+
+```sql
+ALTER TABLE PAYMENT
+ADD CONSTRAINT chk_payment_method
+CHECK (
+    Payment_Method IN (
+        'Credit Card',
+        'Cash',
+        'Bank Transfer',
+        'Check',
+        'Bit',
+        'Apple Pay',
+        'PayPal'
+    )
+);
+```
+
+---
+
+## 2. Customer Email Validation (`chk_customer_email_format`)
+
+### Motivation
+Ensures that all customer email addresses contain the `'@'` symbol to reduce invalid data entry.
+
+### SQL
+
+```sql
+ALTER TABLE CUSTOMER
+ADD CONSTRAINT chk_customer_email_format
+CHECK (Email LIKE '%@%');
+```
+
+---
+
+## 3. Employee Hire Date Validation (`chk_employee_hire_date`)
+
+### Motivation
+Prevents unrealistic hire dates caused by accidental typing mistakes.
+
+### SQL
+
+```sql
+ALTER TABLE EMPLOYEE
+ADD CONSTRAINT chk_employee_hire_date
+CHECK (EXTRACT(YEAR FROM Hire_Date) >= 2010);
+```
+
+---
+
+# 6. Database Indexing & Optimization
+
+The primary goal of adding indexes was to optimize heavy `SELECT` and `UPDATE` queries based on our query usage patterns.
+
+---
+
+## 1. Index on `Customer_ID` in `SUBSCRIPTION` Table
+
+### Motivation
+Improves lookup and partition performance for customer subscription history queries.
+
+### SQL
+
+```sql
+CREATE INDEX idx_sub_customer
+ON SUBSCRIPTION(Customer_ID);
+```
+
+---
+
+## 2. Index on `Expiration_Date` in `SUBSCRIPTION` Table
+
+### Motivation
+Speeds up sorting and aggregation operations involving subscription expiration dates.
+
+### SQL
+
+```sql
+CREATE INDEX idx_sub_expiration
+ON SUBSCRIPTION(Expiration_Date);
+```
+
+---
+
+## 3. Index on `Contract_Number` in `PAYMENT` Table
+
+### Motivation
+Optimizes joins between subscriptions and payments, especially in aggregation-heavy queries.
+
+### SQL
+
+```sql
+CREATE INDEX idx_payment_contract
+ON PAYMENT(Contract_Number);
+```
